@@ -13,7 +13,9 @@
 
 import argparse
 import sys
+
 import apt
+import apt_pkg
 
 import lib.base  # pylint: disable=C0413
 import lib.disk  # pylint: disable=C0413
@@ -52,7 +54,7 @@ def parse_args():
     parser.add_argument('-w', '--warning', type=int, default=DEFAULT_WARN, help='')
     parser.add_argument('-t', '--timeout', type=int, default=DEFAULT_TIMEOUT, help='')
     # Define refining arguments
-    parser.add_argument('--critical-type', nargs='?', default='security', choices=DEFAULT_TYPES, help='')
+    parser.add_argument('--critical-type', nargs='?', default=DEFAULT_TYPE, choices=DEFAULT_TYPES, help='')
     parser.add_argument('--update', action='store_true',
                         help='If set, check runs "apt update" on every run. Needs sudo.')
     parser.add_argument('--force-apt', action='store_true',
@@ -62,8 +64,10 @@ def parse_args():
     return parser.parse_args()
 
 
-def apt_update(cache):
+def apt_update():
     """Does an apt-get update."""
+
+    cache = apt.cache.Cache()
 
     try:
         cache.update()
@@ -82,9 +86,14 @@ def apt_list_upgradable(cache):
     return cache_filtered, cache.get_changes()
 
 
-def apt_list_security():
+def apt_list_security(pkg_list):
     """Lists security updates and count of them"""
 
+    pkg_updates = {}
+    for pkg in pkg_list:
+        pkg_updates[pkg.] = {pkg}
+
+    return package, is_security
 
 def apt_count_installed_packages():
     """Counts installed packages"""
@@ -128,12 +137,41 @@ def main():
     except SystemExit:
         sys.exit(STATE_UNKNOWN)
 
-    cache = apt.cache.Cache()
+
+    apt_pkg.init()
 
     if args.update:
-        cache = apt_update(cache)
+        apt_update()
 
-    apt_list_upgradable(cache)
+    cache = apt_pkg.Cache()
+    packages = cache.packages
+
+    upgradable = {}
+    count_installed, count_upgradable, count_security = 0, 0, 0
+
+    for pkg in packages:
+        package = apt.Package(cache, pkg)
+        if package.is_installed and package.is_upgradable:
+            current_version = pkg.current_ver
+
+            versions = pkg.version_list
+            if not versions:
+                continue
+            for other_version in versions:
+                if apt_pkg.version_compare(other_version.ver_str, other_version.ver_str) < 0:
+                    version = other_version
+
+            if version:
+                v = apt.package.Version(package=pkg, cand=version)
+                if apt_pkg.version_compare(current_version.ver_str, version.ver_str) < 0:
+                    upgradable[pkg.name] = {'version_current': pkg.current_ver.ver_str,
+                                            'version_new': version.ver_str,
+                                            'is_security': v.is_security_update}
+
+    print(upgradable)
+
+
+
 
 if __name__ == '__main__':
     try:

@@ -131,37 +131,37 @@ def main():
 
     apt_pkg.init()
 
-    cache = apt_pkg.Cache()
-    packages = cache.packages
-
     if args.update:
         cache_updated = apt_update()
     else:
         cache_updated = apt.cache.Cache()
+
+    cache = apt_pkg.Cache()
+    packages = cache.packages
 
     upgradable = {}
     count_installed, count_upgradable, count_security = 0, 0, 0
 
     for pkg in packages:
         package = apt.package.Package(cache_updated, pkg)
-        if package.is_installed and package.is_upgradable:
-            current_version = pkg.current_ver
+        if package.is_installed:
+            count_installed += 1
 
             versions = pkg.version_list
-            if not versions:
-                continue
+            version = versions[0]
             for other_version in versions:
                 if apt_pkg.version_compare(other_version.ver_str, other_version.ver_str) < 0:
                     version = other_version
 
-            if version:
-                v = apt.package.Version(package=package, cand=version)
+            if pkg.current_ver:
+                v = apt.package.Version(package=pkg, cand=version)
                 if apt_pkg.version_compare(current_version.ver_str, version.ver_str) < 0:
                     upgradable[pkg.name] = {'version_current': pkg.current_ver.ver_str,
                                             'version_new': version.ver_str,
                                             'is_security': v.is_security_update}
 
     print(upgradable)
+    print(count_installed)
 
 
 

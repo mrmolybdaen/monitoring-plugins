@@ -86,15 +86,6 @@ def apt_list_upgradable(cache):
     return cache_filtered, cache.get_changes()
 
 
-def apt_list_security(pkg_list):
-    """Lists security updates and count of them"""
-
-    pkg_updates = {}
-    for pkg in pkg_list:
-        pkg_updates[pkg.] = {pkg}
-
-    return package, is_security
-
 def apt_count_installed_packages():
     """Counts installed packages"""
 
@@ -140,17 +131,19 @@ def main():
 
     apt_pkg.init()
 
-    if args.update:
-        apt_update()
-
     cache = apt_pkg.Cache()
     packages = cache.packages
+
+    if args.update:
+        cache_updated = apt_update()
+    else:
+        cache_updated = apt.cache.Cache()
 
     upgradable = {}
     count_installed, count_upgradable, count_security = 0, 0, 0
 
     for pkg in packages:
-        package = apt.Package(cache, pkg)
+        package = apt.package.Package(cache_updated, pkg)
         if package.is_installed and package.is_upgradable:
             current_version = pkg.current_ver
 
@@ -162,7 +155,7 @@ def main():
                     version = other_version
 
             if version:
-                v = apt.package.Version(package=pkg, cand=version)
+                v = apt.package.Version(package=package, cand=version)
                 if apt_pkg.version_compare(current_version.ver_str, version.ver_str) < 0:
                     upgradable[pkg.name] = {'version_current': pkg.current_ver.ver_str,
                                             'version_new': version.ver_str,

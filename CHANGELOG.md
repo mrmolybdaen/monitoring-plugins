@@ -26,7 +26,6 @@ Monitoring Plugins:
 * snmp: Improve Performance Data Handling ([#481](https://github.com/Linuxfabrik/monitoring-plugins/issues/481)) - update your CSV definition files and add two more columns according to the check's README
 * uptime: Use the plugin to warn about recent reboots ([#722](https://github.com/Linuxfabrik/monitoring-plugins/issues/722)). Note that the plugin now requires a time qualifier when specifying parameters, e.g. ``--warning=180D`` for 180 days (instead of ``--warning=180`` as in previous versions).
 
-
 ### Added
 
 Monitoring Plugins:
@@ -34,6 +33,7 @@ Monitoring Plugins:
 * dhcp-relayed (a port of [check_dhcp_relayed](https://exchange.nagios.org/directory/Plugins/Network-Protocols/DHCP-and-BOOTP/check_dhcp_relayed/details))
 * composer-version
 * mediawiki-version
+* apt
 
 
 ### Changed ("enhancement")

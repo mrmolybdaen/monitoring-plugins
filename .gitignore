@@ -130,4 +130,8 @@ dmypy.json
 # LibreOffice
 .~lock.*
 
+# Editor files
+.vscode/
+.idea/
+
 /icingaweb2-module-director-basket.json

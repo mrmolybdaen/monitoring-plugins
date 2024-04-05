@@ -64,10 +64,8 @@ def parse_args():
     return parser.parse_args()
 
 
-def apt_update():
+def apt_update(cache):
     """Does an apt-get update."""
-
-    cache = apt.cache.Cache()
 
     try:
         cache.update()
@@ -128,41 +126,47 @@ def main():
     except SystemExit:
         sys.exit(STATE_UNKNOWN)
 
-
     apt_pkg.init()
+    pkg_cache = apt_pkg.Cache()
+    apt_cache = apt.cache.Cache()
 
-    if args.update:
-        cache_updated = apt_update()
-    else:
-        cache_updated = apt.cache.Cache()
+    pkg_list = pkg_cache.packages
+    pkg_names = []
+    for pkg in pkg_list:
+        pkg_proxy = apt.package.Package(pkg_cache, pkg)
+        if pkg_proxy.is_installed:
+            pkg_names.append(pkg.name)
 
-    cache = apt_pkg.Cache()
-    packages = cache.packages
+    del pkg_proxy
 
     upgradable = {}
-    count_installed, count_upgradable, count_security = 0, 0, 0
+    for name in pkg_names:
+        package = apt_cache[name]
 
-    for pkg in packages:
-        package = apt.package.Package(cache_updated, pkg)
-        if package.is_installed:
-            count_installed += 1
+        if package.is_upgradable:
+            upgradable[name] = {}
 
-            versions = pkg.version_list
-            version = versions[0]
-            for other_version in versions:
-                if apt_pkg.version_compare(other_version.ver_str, other_version.ver_str) < 0:
-                    version = other_version
+    upgradable_package = []
+    for name in upgradable:
+        upgradable_package.append(pkg_cache[name])
 
-            if pkg.current_ver:
-                v = apt.package.Version(package=pkg, cand=version)
-                if apt_pkg.version_compare(current_version.ver_str, version.ver_str) < 0:
-                    upgradable[pkg.name] = {'version_current': pkg.current_ver.ver_str,
-                                            'version_new': version.ver_str,
-                                            'is_security': v.is_security_update}
+    upgradable_current = []
+    for pkg in upgradable_package:
+        if pkg.has_versions:
+            upgradable_current.append(pkg.current_ver)
+            upgradable[pkg.name]['current_ver'] = pkg.current_ver.ver_str
+            for version in pkg.version_list:
+                if apt_pkg.version_compare(pkg.current_ver.ver_str, version.ver_str) < 0:
+                    upgradable[pkg.name]['next_ver'] = version.ver_str
+                    upgradable[pkg.name]['priority'] = version.priority_str
+                    break
 
-    print(upgradable)
-    print(count_installed)
+    count_installed = len(pkg_names)
+    count_upgradable = len(upgradable)
 
+    print(f'Upgradable packages: {count_upgradable}/{count_installed}')
+    for key in upgradable:
+        print(f'{key}: {upgradable[key]["current_ver"]} -> {upgradable[key]["next_ver"]}, prio {upgradable[key]["priority"]}')
 
 
 

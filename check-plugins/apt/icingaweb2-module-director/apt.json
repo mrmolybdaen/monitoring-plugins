@@ -1,6 +1,6 @@
 {
     "Command": {
-        "cmd-check-ntp-systemd-timesyncd": {
+        "cmd-check-apt": {
             "arguments": {},
             "command": "/usr/lib64/nagios/plugins/apt",
             "disabled": false,

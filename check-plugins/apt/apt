@@ -12,9 +12,8 @@
 """
 
 import argparse
-import os
-import re
 import sys
+import apt
 
 import lib.base  # pylint: disable=C0413
 import lib.disk  # pylint: disable=C0413
@@ -25,7 +24,22 @@ import lib.net  # pylint: disable=C0413
 import lib.shell  # pylint: disable=C0413
 import lib.txt  # pylint: disable=C0413
 import lib.version  # pylint: disable=C0413
-from lib.globals import STATE_OK, STATE_UNKNOWN  # pylint: disable=C0413
+from lib.globals import STATE_OK, STATE_UNKNOWN, STATE_WARN, STATE_CRIT  # pylint: disable=C0413
+
+__author__ = "XIMA Media GmbH, Dresden/Germany"
+__version__ = "20240405"
+
+DESCRIPTION = 'This check provides basic information about updatable packages.'
+
+DEFAULT_CRIT = 1
+DEFAULT_FORCE_APT = False
+DEFAULT_TIMEOUT = 10
+DEFAULT_TYPE = 'security'
+DEFAULT_TYPES = ['security', 'dist-upgrade']
+DEFAULT_UPDATE = True
+DEFAULT_WARN = 0
+
+DEBIAN_LIKE_FALLBACK = ['debian', 'ubuntu', 'mint', 'pop']
 
 
 def parse_args():
@@ -33,16 +47,93 @@ def parse_args():
     """
 
     parser = argparse.ArgumentParser(description=DESCRIPTION)
+    # Define base arguments
+    parser.add_argument('-c', '--critical', type=int, default=DEFAULT_CRIT, help='')
+    parser.add_argument('-w', '--warning', type=int, default=DEFAULT_WARN, help='')
+    parser.add_argument('-t', '--timeout', type=int, default=DEFAULT_TIMEOUT, help='')
+    # Define refining arguments
+    parser.add_argument('--critical-type', nargs='?', default='security', choices=DEFAULT_TYPES, help='')
+    parser.add_argument('--update', action='store_true',
+                        help='If set, check runs "apt update" on every run. Needs sudo.')
+    parser.add_argument('--force-apt', action='store_true',
+                        help='Skip OS check and force script to assume apt is present.')
+    parser.add_argument('--show-source', action='store_true', help='Show source of package updates.')
+
+    return parser.parse_args()
+
+
+def apt_update(cache):
+    """Does an apt-get update."""
+
+    try:
+        cache.update()
+    except apt.cache.LockFailedException as error:
+        lib.base.oao(msg=f'{error}', state=STATE_CRIT, always_ok=False)
+
+    return cache
+
+
+def apt_list_upgradable(cache):
+    """Lists upgradable packages"""
+
+    cache_filtered = apt.cache.FilteredCache(cache)
+    cache_filtered.set_filter(apt.cache.MarkedChangesFilter())
+
+    return cache_filtered, cache.get_changes()
+
+
+def apt_list_security():
+    """Lists security updates and count of them"""
+
+
+def apt_count_installed_packages():
+    """Counts installed packages"""
 
 
 def main():
     """The main function. Hier spielt die Musik.
     """
 
+    if lib.base.WINDOWS:
+        lib.base.oao(msg='Check does not work on Windows.', state=STATE_CRIT, always_ok=False)
+    # check linux flavour
+    try:
+        with open('/etc/os-release', 'r') as release_file:
+            release = release_file.readlines()
+
+    except FileNotFoundError as error:
+        lib.base.oao(msg='Unable to find /etc/os-release', state=STATE_CRIT, always_ok=False)
+
+    release_dict = {}
+    for line in release:
+        line_proxy = line.split('=')
+        release_dict[line_proxy[0]] = line_proxy[1]
+
+    flavour = ''
+    if 'ID_LIKE' in release_dict.keys():
+        flavour = release_dict['ID_LIKE']
+    elif 'NAME' in release_dict.keys():
+        flavour = release_dict['NAME']
+
+    flavour = flavour.strip('\n').strip('\\n')
+
+    if not flavour:
+        lib.base.oao(msg='Could not determine distribution or flavour', state=STATE_CRIT, always_ok=False)
+
+    if not flavour.lower() not in DEBIAN_LIKE_FALLBACK:
+        lib.base.oao(msg='Not a Debian like distro!', state=STATE_CRIT, always_ok=False)
+
     try:
         args = parse_args()
+    except SystemExit:
+        sys.exit(STATE_UNKNOWN)
 
+    cache = apt.cache.Cache()
 
+    if args.update:
+        cache = apt_update(cache)
+
+    apt_list_upgradable(cache)
 
 if __name__ == '__main__':
     try:

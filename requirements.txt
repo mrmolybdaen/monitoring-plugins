@@ -13,3 +13,4 @@ requests
 smbprotocol
 vici
 xmltodict
+python-apt @ git+https://salsa.debian.org/apt-team/python-apt.git@2.7.5

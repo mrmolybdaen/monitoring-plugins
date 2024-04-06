@@ -12,6 +12,7 @@
 """
 
 import argparse
+import re
 import sys
 
 import apt
@@ -31,7 +32,7 @@ from lib.globals import STATE_OK, STATE_UNKNOWN, STATE_WARN, STATE_CRIT  # pylin
 __author__ = "XIMA Media GmbH, Dresden/Germany"
 __version__ = "20240405"
 
-DESCRIPTION = 'This check provides basic information about updatable packages.'
+DESCRIPTION = 'This check provides basic information about updatable packages mostly using python-apt'
 
 DEFAULT_CRIT = 1
 DEFAULT_FORCE_APT = False
@@ -42,6 +43,10 @@ DEFAULT_UPDATE = True
 DEFAULT_WARN = 0
 
 DEBIAN_LIKE_FALLBACK = ['debian', 'ubuntu', 'mint', 'pop']
+
+INFO_STR_UPDATE = ' (update)'
+INFO_STR_UPGRADE = ' (upgrade)'
+INFO_STR_SECURITY = ' (security)'
 
 
 def parse_args():
@@ -60,32 +65,74 @@ def parse_args():
     parser.add_argument('--force-apt', action='store_true',
                         help='Skip OS check and force script to assume apt is present.')
     parser.add_argument('--show-source', action='store_true', help='Show source of package updates.')
+    parser.add_argument('--show-version', action='store_true',
+                        help='Show current and updated versions number.')
+    parser.add_argument('--show-priority', action='store_true', help='Show package priority.')
+
 
     return parser.parse_args()
 
 
-def apt_update(cache):
-    """Does an apt-get update."""
+def hold_back(apt_output):
+    """This string evaluates a list output and returns all hold back packages."""
 
-    try:
-        cache.update()
-    except apt.cache.LockFailedException as error:
-        lib.base.oao(msg=f'{error}', state=STATE_CRIT, always_ok=False)
+    held_back = []
 
-    return cache
+    for line in apt_output:
+        if "hold back" in line or "kept back" in line:
+            start_hold = apt_output.index(line) + 1
+        if "will be upgraded" in line:
+            end_hold = apt_output.index(line)
+            break
+
+    for index in range(start_hold, end_hold):
+        held_back.extend(re.split(r'[\s\v]+', apt_output[index]))
+
+    for pkg in held_back:
+        if not pkg:
+            held_back.remove(pkg)
+
+    return held_back, len(held_back)
 
 
-def apt_list_upgradable(cache):
-    """Lists upgradable packages"""
+def is_security_upgrade(upgradable_dict, apt_cache):
+    """This function returns whether a package is a security upgrade or not
+        by checking its origin.
+    """
 
-    cache_filtered = apt.cache.FilteredCache(cache)
-    cache_filtered.set_filter(apt.cache.MarkedChangesFilter())
+    count_security = 0
+    for name in upgradable_dict.keys():
+        package = apt_cache[name]
+        for v in package.versions:
+            if v.version == upgradable_dict[name]['next_ver']:
+                for o in v.origins:
+                    if 'security' in o.archive:
+                        upgradable_dict[name]['security'] = True
+                        count_security += 1
+                    else:
+                        upgradable_dict[name]['security'] = False
 
-    return cache_filtered, cache.get_changes()
+    return count_security
 
 
-def apt_count_installed_packages():
-    """Counts installed packages"""
+def apt_get_upgrade_simulation(pkg_list=None):
+    """This function simulates apt-get upgrade
+        It returns a list of hold back packages and
+        updates from security lists.
+
+        This is a workaround because phasing is part of python-apt 2.7.7
+        which won't be available until at least Ubuntu 24.10 or Debian 13.
+    """
+
+    success, result = lib.shell.shell_exec('apt-get upgrade -q --simulate')
+
+    if success:
+        result_lines = result[0].splitlines()
+        upgrade, count_upgrade = hold_back(result_lines)
+
+        return upgrade, count_upgrade
+
+    return success, 0
 
 
 def main():
@@ -127,7 +174,7 @@ def main():
         sys.exit(STATE_UNKNOWN)
 
     apt_pkg.init()
-    pkg_cache = apt_pkg.Cache()
+    pkg_cache = apt_pkg.Cache(progress=None)
     apt_cache = apt.cache.Cache()
 
     pkg_list = pkg_cache.packages
@@ -163,10 +210,26 @@ def main():
 
     count_installed = len(pkg_names)
     count_upgradable = len(upgradable)
+    count_security = is_security_upgrade(upgradable, apt_cache)
 
-    print(f'Upgradable packages: {count_upgradable}/{count_installed}')
+    dist_upgrade, count_dist_upgrade = apt_get_upgrade_simulation(pkg_list)
+
+    print(f'Upgradable packages: {count_upgradable}/{count_installed}, security {count_security}, held_back {count_dist_upgrade}')
     for key in upgradable:
-        print(f'{key}: {upgradable[key]["current_ver"]} -> {upgradable[key]["next_ver"]}, prio {upgradable[key]["priority"]}')
+
+        print_str = f'{key}'
+        if args.show_version or args.show_priority:
+            print_str += ': '
+        if args.show_version:
+            print_str += f'{upgradable[key]["current_ver"]} -> {upgradable[key]["next_ver"]}'
+        if args.show_priority:
+            if args.show_version:
+                print_str += ', '
+            print_str += f'priority {upgradable[key]["priority"]}'
+
+        print(print_str)
+
+    apt_get_upgrade_simulation()
 
 
 

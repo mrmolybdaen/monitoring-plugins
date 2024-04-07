@@ -1,5 +1,5 @@
-Check apt
-=========
+Check apt-get
+=============
 
 Overview
 --------
@@ -25,9 +25,9 @@ Help
 
 .. code-block:: test
 
-    usage: apt [-h] [--always-ok] [-c CRITICAL] [-w WARNING]
-               [--criticality {security,dist-upgrade,uncritical} [{security,dist-upgrade,uncritical} ...]]
-               [--show-extended] [--update] [-V]
+    usage: apt-get [-h] [--always-ok] [-c CRITICAL] [-w WARNING]
+                   [--criticality {security,dist-upgrade,uncritical} [{security,dist-upgrade,uncritical} ...]]
+                   [--show-extended] [--update] [-V]
 
     This check provides basic information about updatable packages, mostly using python-apt
 
@@ -58,7 +58,7 @@ Just a list:
 
 .. code-block:: bash
 
-    sudo python3 apt --update --warning 0 --critical 0 --criticality security dist-upgrade
+    sudo python3 apt-get --update --warning 0 --critical 0 --criticality security dist-upgrade
 
 Output:
 
@@ -81,7 +81,7 @@ Showing extended information:
 
 .. code-block:: bash
 
-    sudo python3 apt --update --warning 0 --critical 0 --criticality security dist-upgrade --show-extended
+    sudo python3 apt-get --update --warning 0 --critical 0 --criticality security dist-upgrade --show-extended
 
 .. code-block:: text
 

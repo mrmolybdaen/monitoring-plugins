@@ -10,7 +10,7 @@
             "methods_execute": "PluginCheck",
             "object_name": "cmd-check-apt",
             "object_type": "object",
-            "timeout": "10",
+            "timeout": "15",
             "vars": {},
             "zone": null,
             "uuid": "b2f5e5ad-62e4-414c-b6b8-b550fe102c39"

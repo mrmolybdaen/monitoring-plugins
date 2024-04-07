@@ -15,9 +15,10 @@ import argparse
 import re
 import sys
 
-import apt
 import apt_pkg
+import apt
 
+import lib.args
 import lib.base  # pylint: disable=C0413
 import lib.disk  # pylint: disable=C0413
 import lib.distro  # pylint: disable=C0413
@@ -40,10 +41,6 @@ DEFAULT_CRITICALITY_TYPES = ['security', 'dist-upgrade', 'uncritical']
 DEFAULT_UPDATE = True
 DEFAULT_WARN = 1
 
-INFO_STR_UPDATE = ' (update)'
-INFO_STR_UPGRADE = ' (upgrade)'
-INFO_STR_SECURITY = ' (security)'
-
 
 def parse_args():
     """Parse command line arguments using argparse module.
@@ -63,6 +60,12 @@ def parse_args():
         default=DEFAULT_CRIT,
         help='Threshold number of packages to return "critical". '
              '"0" and unset do not emit critical'
+    )
+    parser.add_argument(
+        '--test',
+        help='For unit tests. Needs "path-to-stdout-file,path-to-stderr-file,expected-retc".',
+        dest='TEST',
+        type=lib.args.csv,
     )
     parser.add_argument(
         '-w', '--warning',
@@ -92,12 +95,12 @@ def parse_args():
     parser.add_argument(
         '--update',
         action='store_true',
-        help='If set, check runs "apt update" on every run. Needs sudo.'
+        help='If set, check runs "apt-get update" on every run. Needs sudo.'
     )
     parser.add_argument(
         '-V', '--version',
         action='version',
-        version='{0}: v{1} by {2}'.format('%(prog)s', __version__, __author__)
+        version=f'%(prog)s: v{__version__} by {__author__}'
     )
 
     return parser.parse_args()
@@ -181,9 +184,15 @@ def hold_back(apt_output, upgrade_dict):
         for index in range(start_hold, end_hold):
             held_back.extend(re.split(r'[\s\v]+', apt_output[index]))
 
-    for pkg in held_back:
+    # Copy list
+    held = held_back
+    # remove all empty strings and Nones
+    for pkg in held:
         if not pkg:
             held_back.remove(pkg)
+
+    held_back = held
+    del held
 
     for pkg in upgrade_dict.keys():
         if pkg in held_back:
@@ -235,7 +244,8 @@ def apt_get_upgrade_simulation(upgrade_dict):
     """
 
     success, result = lib.shell.shell_exec('apt-get upgrade -q --simulate')
-
+    print(success)
+    print(result)
     if success:
         result_lines = result[0].splitlines()
         count_upgrade = hold_back(result_lines, upgrade_dict)
@@ -296,7 +306,7 @@ def show_list_special(upgradable_dict, key):
 def show_list_normal(upgradable_dict):
     """Create a string containing an enumeration of keys in upgradable_dict"""
 
-    enum_string = f'\n\nNormal updates:\n'
+    enum_string = '\n\nNormal updates:\n'
     for pkg in upgradable_dict.keys():
         if not upgradable_dict[pkg]['dist-upgrade'] and not upgradable_dict[pkg]['security']:
             enum_string += '  - ' + pkg + '\n'
@@ -312,25 +322,30 @@ def main():
     except SystemExit:
         sys.exit(STATE_UNKNOWN)
 
-    # This is quite unintuitive. But both Cache classes do have different
-    # properties and methods and may be used in different functions.
-    # They deliver different information.
-    # == Initialize apt.cache.Cache() ==
-    try:
-        apt_cache = apt_cache_init(args.update)
-    except Exception:
-        lib.base.cu(msg='There might be a problem with some package repositories.')
-    # == Initialize the apt_pkg.Cache() ==
-    apt_pkg.init()
-    pkg_cache = apt_pkg.Cache(progress=None)
+    if args.TEST is None:
+        # This is quite counterintuitive. But both Cache classes do have different
+        # properties and methods and may be used in different functions.
+        # They deliver different information.
+        # == Initialize apt.cache.Cache() ==
+        try:
+            apt_cache = apt_cache_init(args.update)
+        except Exception:
+            lib.base.cu(msg='There might be a problem with some package repositories.')
+        # == Initialize the apt_pkg.Cache() ==
+        apt_pkg.init()
+        pkg_cache = apt_pkg.Cache(progress=None)
 
-    # Gather package information
-    pkg_names, count_installed = pkg_cache_get_installed(pkg_cache)
-    upgradable_dict, count_upgradable = get_upgradable(pkg_names, apt_cache, pkg_cache)
-    count_security = is_security_upgrade(upgradable_dict, apt_cache)
-    count_dist_upgrade = apt_get_upgrade_simulation(upgradable_dict)
-    if count_dist_upgrade == -1:
-        lib.base.cu()
+        # Gather package information
+        pkg_names, count_installed = pkg_cache_get_installed(pkg_cache)
+        upgradable_dict, count_upgradable = get_upgradable(pkg_names, apt_cache, pkg_cache)
+        count_security = is_security_upgrade(upgradable_dict, apt_cache)
+        count_dist_upgrade = apt_get_upgrade_simulation(upgradable_dict)
+        if count_dist_upgrade == -1:
+            lib.base.cu()
+
+    else:
+        # Use test data
+        std, stderr, retc = lib.test.test(args.TEST)
 
     data_performance = ''
 

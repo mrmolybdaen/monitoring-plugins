@@ -1,19 +1,69 @@
 {
     "Command": {
         "cmd-check-apt-get": {
-            "arguments": {},
-            "command": "/usr/lib64/nagios/plugins/apt-get",
+            "arguments": {
+                "--always-ok": {
+                    "set_if": "$apt_get_always_ok$"
+                },
+                "--critical": {
+                    "value": "$apt_get_critical$"
+                },
+                "--warning": {
+                    "value": "$apt_get_warning$"
+                },
+                "--criticality": {
+                    "value": "$apt_get_criticality$"
+                },
+                "--show-extended": {
+                    "set_if": "$apt_get_show_extended$"
+                },
+                "--update": {
+                    "set_if": "$apt_get_update$"
+                }
+            },
+            "command": "/usr/bin/sudo /usr/lib64/nagios/plugins/apt-get",
             "disabled": false,
-            "fields": [],
+            "fields": [
+                {
+                    "datafield_id": 1,
+                    "is_required": "n",
+                    "var_filter": null
+                },
+                {
+                    "datafield_id": 2,
+                    "is_required": "n",
+                    "var_filter": null
+                },
+                {
+                    "datafield_id": 3,
+                    "is_required": "n",
+                    "var_filter": null
+                },
+                {
+                    "datafield_id": 4,
+                    "is_required": "n",
+                    "var_filter": null
+                },
+                {
+                    "datafield_id": 5,
+                    "is_required": "n",
+                    "var_filter": null
+                },
+                {
+                    "datafield_id": 6,
+                    "is_required": "n",
+                    "var_filter": null
+                }
+            ],
             "imports": [],
             "is_string": null,
             "methods_execute": "PluginCheck",
             "object_name": "cmd-check-apt-get",
             "object_type": "object",
-            "timeout": "15",
+            "timeout": 30,
             "vars": {},
             "zone": null,
-            "uuid": "b2f5e5ad-62e4-414c-b6b8-b550fe102c39"
+            "uuid": "cd275000-16e2-407e-8941-b35a90f0dd17"
         }
     },
     "ServiceTemplate": {
@@ -21,8 +71,8 @@
             "action_url": null,
             "apply_for": null,
             "assign_filter": null,
-            "check_command": "cmd-check-apt-get",
-            "check_interval": 60,
+            "check_command": "cmd-check-apt-get-sudo",
+            "check_interval": 86400,
             "check_period": null,
             "check_timeout": null,
             "command_endpoint": null,
@@ -33,7 +83,7 @@
             "enable_flapping": null,
             "enable_notifications": true,
             "enable_passive_checks": null,
-            "enable_perfdata": null,
+            "enable_perfdata": true,
             "event_command": null,
             "fields": [],
             "flapping_threshold_high": null,
@@ -46,21 +96,118 @@
                 "tpl-service-generic"
             ],
             "max_check_attempts": 5,
-            "notes": "This plugin checks the state apt-get.",
+            "notes": "This check provides basic information about updatable packages, mostly using python-apt",
             "notes_url": "https://github.com/Linuxfabrik/monitoring-plugins/tree/main/check-plugins/apt-get",
             "object_name": "tpl-service-apt-get",
             "object_type": "template",
-            "retry_interval": 15,
+            "retry_interval": 900,
             "service_set": null,
             "template_choice": null,
-            "use_agent": null,
+            "use_agent": true,
             "use_var_overrides": null,
             "vars": {
-                "criticality": "C"
+                "criticality": "B",
+                "apt_get_always_ok": false,
+                "apt_get_critical": 0,
+                "apt_get_warning": 1,
+                "apt_get_criticality": "uncritical",
+                "apt_get_show_extended": false,
+                "apt_get_update": false
             },
             "volatile": null,
             "zone": null,
-            "uuid": "45b1b36a-3838-4878-8b3e-e74872620a2d"
+            "uuid": "6252cb70-2250-4bf7-a4aa-fa445d678870"
+        }
+    },
+    "DataList": {
+        "apt_get_criticality_list": {
+            "list_name": "apt_get_criticality_list",
+            "owner": "icinga-admin",
+            "entries": [
+                {
+                    "entry_name": "security",
+                    "entry_value": "Security",
+                    "format": "string",
+                    "allowed_roles": null
+                },
+                {
+                    "entry_name": "dist-upgrade",
+                    "entry_value": "Dist Upgrade",
+                    "format": "string",
+                    "allowed_roles": null
+                },
+                {
+                    "entry_name": "uncritical",
+                    "entry_value": "Uncritical",
+                    "format": "string",
+                    "allowed_roles": null
+                }
+            ],
+            "uuid": "3afebf3e-fb65-4468-98d4-1e5760a15743"
+        }
+    },
+    "Datafield": {
+        "1": {
+            "varname": "apt_get_always_ok",
+            "caption": "Apt Get: Always OK?",
+            "description": "Always returns OK",
+            "datatype": "Icinga\\Module\\Director\\DataType\\DataTypeBoolean",
+            "format": null,
+            "settings": {},
+            "uuid": "2fb667bb-cfbf-433b-8104-96ca469e9861"
+        },
+        "2": {
+            "varname": "apt_get_critical",
+            "caption": "Apt Get: Critical",
+            "description": "Threshold number of packages to return \"critical\". \"0\" and unset do not emit critical",
+            "datatype": "Icinga\\Module\\Director\\DataType\\DataTypeString",
+            "format": null,
+            "settings": {
+                "visibility": "visible"
+            },
+            "uuid": "f3d34c8c-c025-45a1-99a8-72d95a1a79df"
+        },
+        "3": {
+            "varname": "apt_get_warning",
+            "caption": "Apt Get: Warning",
+            "description": "Threshold number of packages to return \"warning\". \"0\" and unset do not emit warning",
+            "datatype": "Icinga\\Module\\Director\\DataType\\DataTypeString",
+            "format": null,
+            "settings": {
+                "visibility": "visible"
+            },
+            "uuid": "472301fb-c0cd-475a-8561-47402a91a2d4"
+        },
+        "4": {
+            "varname": "apt_get_criticality",
+            "caption": "Apt Get: Criticality",
+            "description": "Defines on which type of package updates the check returns critical. \"uncritical never returns critical\" \"dist-upgrade returns CRITICAL on dist-upgrades\" \"security\" returns CRITICAL if the updated version's source is the distributions security repo",
+            "datatype": "Icinga\\Module\\Director\\DataType\\DataTypeDatalist",
+            "format": null,
+            "settings": {
+                "behavior": "strict",
+                "data_type": "string",
+                "datalist": "apt_get_criticality_list"
+            },
+            "uuid": "d66ce6f9-f51f-43a6-a040-d0f8a328f724"
+        },
+        "5": {
+            "varname": "apt_get_show_extended",
+            "caption": "Apt Get: Show Extended?",
+            "description": "Show human readable package priority, package source repository and current and pending version.",
+            "datatype": "Icinga\\Module\\Director\\DataType\\DataTypeBoolean",
+            "format": null,
+            "settings": {},
+            "uuid": "5aa09e78-c1bf-4ba9-b1c8-99b46c59f7d6"
+        },
+        "6": {
+            "varname": "apt_get_update",
+            "caption": "Apt Get: Update?",
+            "description": "If set, check runs \"apt-get update\" on every run. Needs sudo.",
+            "datatype": "Icinga\\Module\\Director\\DataType\\DataTypeBoolean",
+            "format": null,
+            "settings": {},
+            "uuid": "7b77a5eb-6d5a-4a2e-a2e7-cc6c3493c152"
         }
     }
 }

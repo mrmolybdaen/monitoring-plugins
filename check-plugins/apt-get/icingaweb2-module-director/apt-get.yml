@@ -1,4 +1,15 @@
 ---
+variants:
+  - linux
+
 overwrites:
+  '["Command"]["cmd-check-apt-get"]["command"]': '/usr/bin/sudo /usr/lib64/nagios/plugins/apt-get'
+  '["Command"]["cmd-check-apt-get"]["timeout"]': 30
+  '["ServiceTemplate"]["tpl-service-apt-get"]["check_command"]': 'cmd-check-apt-get-sudo'
+  '["ServiceTemplate"]["tpl-service-apt-get"]["check_interval"]': 86400
   '["ServiceTemplate"]["tpl-service-apt-get"]["enable_perfdata"]': true
+  '["ServiceTemplate"]["tpl-service-apt-get"]["max_check_attempts"]': 5
+  '["ServiceTemplate"]["tpl-service-apt-get"]["retry_interval"]': 900
+  '["ServiceTemplate"]["tpl-service-apt-get"]["use_agent"]': true
   '["ServiceTemplate"]["tpl-service-apt-get"]["vars"]["criticality"]': 'B'
+

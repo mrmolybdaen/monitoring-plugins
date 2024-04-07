@@ -28,7 +28,7 @@ __author__ = 'Linuxfabrik GmbH, Zurich/Switzerland'
 __version__ = '2024022601'
 
 DESCRIPTION = """Checks the timespan since the last package manager activity,
-                 for example due to an apt install/update."""
+                 for example due to an apt_get-get install/update."""
 
 DEFAULT_WARN  = 90   # days
 DEFAULT_CRIT  = 365  # days
@@ -93,7 +93,7 @@ def main():
         # do not call the command, put in test data
         stdout, stderr, retc = lib.test.test(args.TEST)
 
-    # stdout: 1680072089 adduser\n1680072121 apparmor\n1680072091 apt\n
+    # stdout: 1680072089 adduser\n1680072121 apparmor\n1680072091 apt_get-get\n
     try:
         last_activity = lib.txt.mltext2array(stdout, skip_header=False, sort_key=0)
         last_activity = int(last_activity[-1][0])

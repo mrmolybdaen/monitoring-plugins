@@ -33,7 +33,7 @@ Monitoring Plugins:
 * dhcp-relayed (a port of [check_dhcp_relayed](https://exchange.nagios.org/directory/Plugins/Network-Protocols/DHCP-and-BOOTP/check_dhcp_relayed/details))
 * composer-version
 * mediawiki-version
-* apt
+* apt-get
 
 
 ### Changed ("enhancement")

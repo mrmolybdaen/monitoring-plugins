@@ -75,7 +75,7 @@ Output:
       - qemu-block-extra
       - codium
       - qemu-system-data
-      - qemu-system-gui|'installed'=2494;;;0; 'upgradable'=9;;;0; 'security'=0;;;0; 'dist-upgrade'=0;;;0
+      - qemu-system-gui
 
 Showing extended information:
 

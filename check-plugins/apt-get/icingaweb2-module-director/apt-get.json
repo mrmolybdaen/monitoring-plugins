@@ -1,14 +1,14 @@
 {
     "Command": {
-        "cmd-check-apt": {
+        "cmd-check-apt-get": {
             "arguments": {},
-            "command": "/usr/lib64/nagios/plugins/apt",
+            "command": "/usr/lib64/nagios/plugins/apt-get",
             "disabled": false,
             "fields": [],
             "imports": [],
             "is_string": null,
             "methods_execute": "PluginCheck",
-            "object_name": "cmd-check-apt",
+            "object_name": "cmd-check-apt-get",
             "object_type": "object",
             "timeout": "15",
             "vars": {},
@@ -17,11 +17,11 @@
         }
     },
     "ServiceTemplate": {
-        "tpl-service-apt": {
+        "tpl-service-apt-get": {
             "action_url": null,
             "apply_for": null,
             "assign_filter": null,
-            "check_command": "cmd-check-apt",
+            "check_command": "cmd-check-apt-get",
             "check_interval": 60,
             "check_period": null,
             "check_timeout": null,
@@ -40,15 +40,15 @@
             "flapping_threshold_low": null,
             "groups": [],
             "host": null,
-            "icon_image": "apt.png",
+            "icon_image": "apt-get.png",
             "icon_image_alt": null,
             "imports": [
                 "tpl-service-generic"
             ],
             "max_check_attempts": 5,
-            "notes": "This plugin checks the state apt.",
-            "notes_url": "https://github.com/Linuxfabrik/monitoring-plugins/tree/main/check-plugins/apt",
-            "object_name": "tpl-service-apt",
+            "notes": "This plugin checks the state apt-get.",
+            "notes_url": "https://github.com/Linuxfabrik/monitoring-plugins/tree/main/check-plugins/apt-get",
+            "object_name": "tpl-service-apt-get",
             "object_type": "template",
             "retry_interval": 15,
             "service_set": null,

@@ -342,7 +342,6 @@ def main():
         count_dist_upgrade = apt_get_upgrade_simulation(upgradable_dict)
         if count_dist_upgrade == -1:
             lib.base.cu()
-
     else:
         # Use test data
         std, stderr, retc = lib.test.test(args.TEST)
@@ -373,7 +372,7 @@ def main():
             if not args.show_extended:
                 data_shown += show_list_special(upgradable_dict, 'dist-upgrade')
             else:
-                data_shown += '\n\nSecurity:\n'
+                data_shown += '\n\ndist-upgrade:\n'
                 data_shown += show_extended(upgradable_dict, filter_list=['dist-upgrade'])
             # Set optional criticality states
             if 'dist-upgrade' in args.criticality:

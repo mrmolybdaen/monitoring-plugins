@@ -34,15 +34,13 @@ __version__ = "20240405"
 
 DESCRIPTION = 'This check provides basic information about updatable packages mostly using python-apt'
 
-DEFAULT_CRIT = 1
+DEFAULT_CRIT = 0
 DEFAULT_FORCE_APT = False
 DEFAULT_TIMEOUT = 10
-DEFAULT_TYPE = 'security'
-DEFAULT_TYPES = ['security', 'dist-upgrade']
+DEFAULT_CRITICALITY_TYPE = 'uncritical'
+DEFAULT_CRITICALITY_TYPES = ['security', 'dist-upgrade', 'uncritical']
 DEFAULT_UPDATE = True
-DEFAULT_WARN = 0
-
-DEBIAN_LIKE_FALLBACK = ['debian', 'ubuntu', 'mint', 'pop']
+DEFAULT_WARN = 1
 
 INFO_STR_UPDATE = ' (update)'
 INFO_STR_UPGRADE = ' (upgrade)'
@@ -55,28 +53,129 @@ def parse_args():
 
     parser = argparse.ArgumentParser(description=DESCRIPTION)
     # Define base arguments
-    parser.add_argument('-c', '--critical', type=int, default=DEFAULT_CRIT, help='')
-    parser.add_argument('-w', '--warning', type=int, default=DEFAULT_WARN, help='')
-    parser.add_argument('-t', '--timeout', type=int, default=DEFAULT_TIMEOUT, help='')
+    parser.add_argument(
+        '--always-ok',
+        action='store_true',
+        default=False,
+        help='Always returns OK',
+    )
+    parser.add_argument(
+        '-c', '--critical',
+        type=int,
+        default=DEFAULT_CRIT,
+        help='Threshold number of packages to return "critical". "0" or unset does not emit critical'
+    )
+    parser.add_argument(
+        '-w', '--warning',
+        type=int,
+        default=DEFAULT_WARN,
+        help='Threshold number of packages to return "warning". "0" or unset does not emit warning'
+    )
     # Define refining arguments
-    parser.add_argument('--critical-type', nargs='?', default=DEFAULT_TYPE, choices=DEFAULT_TYPES, help='')
-    parser.add_argument('--update', action='store_true',
-                        help='If set, check runs "apt update" on every run. Needs sudo.')
-    parser.add_argument('--force-apt', action='store_true',
-                        help='Skip OS check and force script to assume apt is present.')
-    parser.add_argument('--show-source', action='store_true', help='Show source of package updates.')
-    parser.add_argument('--show-version', action='store_true',
-                        help='Show current and updated versions number.')
-    parser.add_argument('--show-priority', action='store_true', help='Show package priority.')
-
+    parser.add_argument(
+        '--criticality',
+        nargs='+',
+        default=DEFAULT_CRITICALITY_TYPE,
+        choices=DEFAULT_CRITICALITY_TYPES,
+        help='Defines on which type of package updates the check returns critical.'
+             + '\n"uncritical never returns critical"'
+             + '\n"dist-upgrade returns CRITICAL on dist-upgrades"'
+             + '\n"security" returns CRITICAL if the updated version\'s source is the distributions security repo'
+    )
+    parser.add_argument(
+        '--show-priority',
+        action='store_true',
+        help='Show human readable package priority.'
+    )
+    parser.add_argument(
+        '--show-source',
+        action='store_true',
+        help='Show source of package updates.'
+    )
+    parser.add_argument(
+        '--show-version',
+        action='store_true',
+        help='Show current and updated versions number.'
+    )
+    parser.add_argument(
+        '--update',
+        action='store_true',
+        help='If set, check runs "apt update" on every run. Needs sudo.'
+    )
+    parser.add_argument(
+        '-V', '--version',
+        action='version',
+        version='{0}: v{1} by {2}'.format('%(prog)s', __version__, __author__)
+    )
 
     return parser.parse_args()
 
 
-def hold_back(apt_output):
+def apt_cache_init(update = False):
+    """
+        Initialize apt.cache.Cache(), optionally do apt.cache.Cache().update if update is True.
+    """
+
+    cache = apt.cache.Cache()
+    if update:
+        try:
+            cache.update()
+            cache.open()
+        except apt.cache.LockFailedException as error:
+            lib.base.oao(msg=f'Try using sudo!: {error}', state=STATE_CRIT, always_ok=False)
+
+    return cache
+
+
+def pkg_cache_get_installed(pkg_cache):
+    """Get all installed packages from apt_pkg.Cache().
+    """
+
+    pkg_list = pkg_cache.packages
+    pkg_names = []
+    for pkg in pkg_list:
+        pkg_proxy = apt.package.Package(pkg_cache, pkg)
+        if pkg_proxy.is_installed:
+            pkg_names.append(pkg.name)
+
+    del pkg_proxy
+
+    return pkg_names, len(pkg_names)
+
+
+def get_upgradable(pkg_names, apt_cache, pkg_cache):
+    """Get, count and return upgradable packages."""
+
+    upgradable_dict = {}
+    for name in pkg_names:
+        package = apt_cache[name]
+
+        if package.is_upgradable:
+            upgradable_dict[name] = {}
+
+    upgradable_package = []
+    for name in upgradable_dict:
+        upgradable_package.append(pkg_cache[name])
+
+    upgradable_current = []
+    for pkg in upgradable_package:
+        if pkg.has_versions:
+            upgradable_current.append(pkg.current_ver)
+            upgradable_dict[pkg.name]['current_ver'] = pkg.current_ver.ver_str
+            for version in pkg.version_list:
+                if apt_pkg.version_compare(pkg.current_ver.ver_str, version.ver_str) < 0:
+                    upgradable_dict[pkg.name]['next_ver'] = version.ver_str
+                    upgradable_dict[pkg.name]['priority'] = version.priority_str
+                    break
+
+    return upgradable_dict, len(upgradable_dict)
+
+
+def hold_back(apt_output, upgrade_dict):
     """This string evaluates a list output and returns all hold back packages."""
 
     held_back = []
+    start_hold, end_hold = None, None
 
     for line in apt_output:
         if "hold back" in line or "kept back" in line:
@@ -85,14 +184,21 @@ def hold_back(apt_output):
             end_hold = apt_output.index(line)
             break
 
-    for index in range(start_hold, end_hold):
-        held_back.extend(re.split(r'[\s\v]+', apt_output[index]))
+    if start_hold is not None and end_hold is not None:
+        for index in range(start_hold, end_hold):
+            held_back.extend(re.split(r'[\s\v]+', apt_output[index]))
 
     for pkg in held_back:
         if not pkg:
             held_back.remove(pkg)
 
-    return held_back, len(held_back)
+    for pkg in upgrade_dict.keys():
+        if pkg in held_back:
+            upgrade_dict[pkg]['dist-upgrade'] = True
+        else:
+            upgrade_dict[pkg]['dist-upgrade'] = False
+
+    return len(held_back)
 
 
 def is_security_upgrade(upgradable_dict, apt_cache):
@@ -115,7 +221,7 @@ def is_security_upgrade(upgradable_dict, apt_cache):
     return count_security
 
 
-def apt_get_upgrade_simulation(pkg_list=None):
+def apt_get_upgrade_simulation(upgrade_dict):
     """This function simulates apt-get upgrade
         It returns a list of hold back packages and
         updates from security lists.
@@ -128,109 +234,82 @@ def apt_get_upgrade_simulation(pkg_list=None):
 
     if success:
         result_lines = result[0].splitlines()
-        upgrade, count_upgrade = hold_back(result_lines)
+        count_upgrade = hold_back(result_lines, upgrade_dict)
 
-        return upgrade, count_upgrade
+        return count_upgrade
 
-    return success, 0
+    return -1
 
 
 def main():
     """The main function. Hier spielt die Musik.
     """
-
-    if lib.base.WINDOWS:
-        lib.base.oao(msg='Check does not work on Windows.', state=STATE_CRIT, always_ok=False)
-    # check linux flavour
-    try:
-        with open('/etc/os-release', 'r') as release_file:
-            release = release_file.readlines()
-
-    except FileNotFoundError as error:
-        lib.base.oao(msg='Unable to find /etc/os-release', state=STATE_CRIT, always_ok=False)
-
-    release_dict = {}
-    for line in release:
-        line_proxy = line.split('=')
-        release_dict[line_proxy[0]] = line_proxy[1]
-
-    flavour = ''
-    if 'ID_LIKE' in release_dict.keys():
-        flavour = release_dict['ID_LIKE']
-    elif 'NAME' in release_dict.keys():
-        flavour = release_dict['NAME']
-
-    flavour = flavour.strip('\n').strip('\\n')
-
-    if not flavour:
-        lib.base.oao(msg='Could not determine distribution or flavour', state=STATE_CRIT, always_ok=False)
-
-    if not flavour.lower() not in DEBIAN_LIKE_FALLBACK:
-        lib.base.oao(msg='Not a Debian like distro!', state=STATE_CRIT, always_ok=False)
-
     try:
         args = parse_args()
     except SystemExit:
         sys.exit(STATE_UNKNOWN)
 
+    # This is quite unintuitive. But both Cache classes do have different
+    # properties and methods and may be used in different functions.
+    # They deliver different information.
+    # == Initialize apt.cache.Cache() ==
+    apt_cache = apt_cache_init(args.update)
+    # == Initialize the apt_pkg.Cache() ==
     apt_pkg.init()
     pkg_cache = apt_pkg.Cache(progress=None)
-    apt_cache = apt.cache.Cache()
 
-    pkg_list = pkg_cache.packages
-    pkg_names = []
-    for pkg in pkg_list:
-        pkg_proxy = apt.package.Package(pkg_cache, pkg)
-        if pkg_proxy.is_installed:
-            pkg_names.append(pkg.name)
+    # Gather package information
+    pkg_names, count_installed = pkg_cache_get_installed(pkg_cache)
+    upgradable_dict, count_upgradable = get_upgradable(pkg_names, apt_cache, pkg_cache)
+    count_security = is_security_upgrade(upgradable_dict, apt_cache)
+    count_dist_upgrade = apt_get_upgrade_simulation(upgradable_dict)
 
-    del pkg_proxy
+    data_performance = ''
 
-    upgradable = {}
-    for name in pkg_names:
-        package = apt_cache[name]
+    exit_status = STATE_OK
+    if count_upgradable:
+        data_shown = f'Found pending updates. {count_upgradable}/{count_installed},'\
+                     + f'dist: {count_dist_upgrade}, security: {count_security}'
 
-        if package.is_upgradable:
-            upgradable[name] = {}
+        # Set return status
+        if args.warning and count_upgradable >= args.warning:
+            exit_status = STATE_WARN
+        if args.critical and count_upgradable >= args.critical:
+            exit_status = STATE_CRIT
 
-    upgradable_package = []
-    for name in upgradable:
-        upgradable_package.append(pkg_cache[name])
+        if count_security:
+            data_shown += f'\n\nSecurity updates:\n'
+            for pkg in upgradable_dict.keys():
+                if upgradable_dict[pkg]['security']:
+                    data_shown += '  - ' + pkg + '\n'
+            if 'security' in args.criticality:
+                exit_status = STATE_CRIT
 
-    upgradable_current = []
-    for pkg in upgradable_package:
-        if pkg.has_versions:
-            upgradable_current.append(pkg.current_ver)
-            upgradable[pkg.name]['current_ver'] = pkg.current_ver.ver_str
-            for version in pkg.version_list:
-                if apt_pkg.version_compare(pkg.current_ver.ver_str, version.ver_str) < 0:
-                    upgradable[pkg.name]['next_ver'] = version.ver_str
-                    upgradable[pkg.name]['priority'] = version.priority_str
-                    break
+        if count_dist_upgrade:
+            data_shown += f'\n\ndist-upgrades:\n'
+            for pkg in upgradable_dict.keys():
+                if upgradable_dict[pkg]['dist-upgrades']:
+                    data_shown += '  - ' + pkg + '\n'
+            # Set optional criticality states
+            if 'dist-upgrade' in args.criticality:
+                exit_status = STATE_CRIT
 
-    count_installed = len(pkg_names)
-    count_upgradable = len(upgradable)
-    count_security = is_security_upgrade(upgradable, apt_cache)
+        data_shown += f'\n\nNormal updates:\n'
+        for pkg in upgradable_dict.keys():
+            if not upgradable_dict[pkg]['dist-upgrade'] and not upgradable_dict[pkg]['security']:
+                data_shown += '  - ' + pkg + '\n'
 
-    dist_upgrade, count_dist_upgrade = apt_get_upgrade_simulation(pkg_list)
+    else:
+        data_shown = f'No upgradable packages found. {count_upgradable}/{count_installed}'
 
-    print(f'Upgradable packages: {count_upgradable}/{count_installed}, security {count_security}, held_back {count_dist_upgrade}')
-    for key in upgradable:
-
-        print_str = f'{key}'
-        if args.show_version or args.show_priority:
-            print_str += ': '
-        if args.show_version:
-            print_str += f'{upgradable[key]["current_ver"]} -> {upgradable[key]["next_ver"]}'
-        if args.show_priority:
-            if args.show_version:
-                print_str += ', '
-            print_str += f'priority {upgradable[key]["priority"]}'
-
-        print(print_str)
-
-    apt_get_upgrade_simulation()
-
+    # Finish
+    # Prepare output data
+    data_performance += lib.base.get_perfdata('installed', count_installed, None, None, None, 0, None)
+    data_performance += lib.base.get_perfdata('upgradable', count_upgradable, None, None, None, 0, None)
+    data_performance += lib.base.get_perfdata('security', count_security, None, None, None, 0, None)
+    data_performance += lib.base.get_perfdata('dist-upgrade', count_dist_upgrade, None, None, None, 0, None)
+    # Exit
+    lib.base.oao(msg=data_shown, state=exit_status, perfdata=data_performance, always_ok=args.always_ok)
 
 
 if __name__ == '__main__':

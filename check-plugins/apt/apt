@@ -273,7 +273,7 @@ def show_extended(upgradable_dict, filter_list):
                 })
 
     columns = table_values[0].keys()
-    headers = ['Package', 'Current Ver.', 'New Version', 'Size', 'Priority', 'Archive', 'Component', 'Site']
+    headers = ['Package', 'Current Version', 'New Version', 'Size', 'Priority', 'Archive', 'Component', 'Site']
 
     if len(table_values) > 0:
         msg = '\n\n'

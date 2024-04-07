@@ -54,6 +54,7 @@ Help
 Usage Examples
 --------------
 
+Just a list:
 .. code-block:: bash
     sudo python3 apt --update --warning 0 --critical 0 --criticality security dist-upgrade
 
@@ -73,6 +74,31 @@ Output:
       - codium
       - qemu-system-data
       - qemu-system-gui|'installed'=2494;;;0; 'upgradable'=9;;;0; 'security'=0;;;0; 'dist-upgrade'=0;;;0
+
+Showing extended information:
+.. code-block:: bash
+
+    sudo python3 apt --update --warning 0 --critical 0 --criticality security dist-upgrade --show-extended
+
+
+.. code-block:: text
+
+    Found pending updates. 9/2494, dist: 0, security: 0
+
+    Standard updates:
+
+
+    Package             ! Current Version        ! New Version            ! Size     ! Priority ! Archive       ! Component  ! Site
+    --------------------+------------------------+------------------------+----------+----------+---------------+------------+-----------------------
+    qemu-system-x86     ! 1:6.2+dfsg-2ubuntu6.17 ! 1:6.2+dfsg-2ubuntu6.18 ! 9.6MiB   ! optional ! jammy-updates ! main       ! de.archive.ubuntu.com
+    firmware-sof-signed ! 2.0-1ubuntu4.5         ! 2.0-1ubuntu4.7         ! 1.2MiB   ! optional ! jammy-updates ! restricted ! de.archive.ubuntu.com
+    qemu                ! 1:6.2+dfsg-2ubuntu6.17 ! 1:6.2+dfsg-2ubuntu6.18 ! 13.8KiB  ! optional ! jammy-updates ! universe   ! de.archive.ubuntu.com
+    qemu-utils          ! 1:6.2+dfsg-2ubuntu6.17 ! 1:6.2+dfsg-2ubuntu6.18 ! 1.5MiB   ! optional ! jammy-updates ! main       ! de.archive.ubuntu.com
+    qemu-system-common  ! 1:6.2+dfsg-2ubuntu6.17 ! 1:6.2+dfsg-2ubuntu6.18 ! 2.0MiB   ! optional ! jammy-updates ! main       ! de.archive.ubuntu.com
+    qemu-block-extra    ! 1:6.2+dfsg-2ubuntu6.17 ! 1:6.2+dfsg-2ubuntu6.18 ! 66.6KiB  ! optional ! jammy-updates ! main       ! de.archive.ubuntu.com
+    codium              ! 1.87.2.24072           ! 1.88.0.24096           ! 88.2MiB  ! optional !               ! main       ! download.vscodium.com
+    qemu-system-data    ! 1:6.2+dfsg-2ubuntu6.17 ! 1:6.2+dfsg-2ubuntu6.18 ! 1.4MiB   ! optional ! jammy-updates ! main       ! de.archive.ubuntu.com
+    qemu-system-gui     ! 1:6.2+dfsg-2ubuntu6.17 ! 1:6.2+dfsg-2ubuntu6.18 ! 214.9KiB ! optional ! jammy-updates ! main       ! de.archive.ubuntu.com
 
 
 States

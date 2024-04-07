@@ -55,6 +55,7 @@ Usage Examples
 --------------
 
 Just a list:
+
 .. code-block:: bash
     sudo python3 apt --update --warning 0 --critical 0 --criticality security dist-upgrade
 
@@ -76,6 +77,7 @@ Output:
       - qemu-system-gui|'installed'=2494;;;0; 'upgradable'=9;;;0; 'security'=0;;;0; 'dist-upgrade'=0;;;0
 
 Showing extended information:
+
 .. code-block:: bash
 
     sudo python3 apt --update --warning 0 --critical 0 --criticality security dist-upgrade --show-extended

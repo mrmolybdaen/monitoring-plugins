@@ -32,11 +32,9 @@ from lib.globals import STATE_OK, STATE_UNKNOWN, STATE_WARN, STATE_CRIT  # pylin
 __author__ = "XIMA Media GmbH, Dresden/Germany"
 __version__ = "20240405"
 
-DESCRIPTION = 'This check provides basic information about updatable packages mostly using python-apt'
+DESCRIPTION = 'This check provides basic information about updatable packages,\nmostly using python-apt'
 
 DEFAULT_CRIT = 0
-DEFAULT_FORCE_APT = False
-DEFAULT_TIMEOUT = 10
 DEFAULT_CRITICALITY_TYPE = 'uncritical'
 DEFAULT_CRITICALITY_TYPES = ['security', 'dist-upgrade', 'uncritical']
 DEFAULT_UPDATE = True
@@ -63,13 +61,15 @@ def parse_args():
         '-c', '--critical',
         type=int,
         default=DEFAULT_CRIT,
-        help='Threshold number of packages to return "critical". "0" or unset does not emit critical'
+        help='Threshold number of packages to return "critical". '
+             '"0" and unset do not emit critical'
     )
     parser.add_argument(
         '-w', '--warning',
         type=int,
         default=DEFAULT_WARN,
-        help='Threshold number of packages to return "warning". "0" or unset does not emit warning'
+        help='Threshold number of packages to return "warning". '
+             '"0" and unset do not emit warning'
     )
     # Define refining arguments
     parser.add_argument(
@@ -77,25 +77,17 @@ def parse_args():
         nargs='+',
         default=DEFAULT_CRITICALITY_TYPE,
         choices=DEFAULT_CRITICALITY_TYPES,
-        help='Defines on which type of package updates the check returns critical.'
-             + '\n"uncritical never returns critical"'
-             + '\n"dist-upgrade returns CRITICAL on dist-upgrades"'
-             + '\n"security" returns CRITICAL if the updated version\'s source is the distributions security repo'
+        help='Defines on which type of package updates the check returns critical. '
+             '"uncritical never returns critical" '
+             '"dist-upgrade returns CRITICAL on dist-upgrades" '
+             '"security" returns CRITICAL if the updated version\'s '
+             'source is the distributions security repo'
     )
     parser.add_argument(
-        '--show-priority',
+        '--show-extended',
         action='store_true',
-        help='Show human readable package priority.'
-    )
-    parser.add_argument(
-        '--show-source',
-        action='store_true',
-        help='Show source of package updates.'
-    )
-    parser.add_argument(
-        '--show-version',
-        action='store_true',
-        help='Show current and updated versions number.'
+        help='Show human readable package priority, package source repository '
+             'and current and pending version.'
     )
     parser.add_argument(
         '--update',
@@ -166,6 +158,7 @@ def get_upgradable(pkg_names, apt_cache, pkg_cache):
                 if apt_pkg.version_compare(pkg.current_ver.ver_str, version.ver_str) < 0:
                     upgradable_dict[pkg.name]['next_ver'] = version.ver_str
                     upgradable_dict[pkg.name]['priority'] = version.priority_str
+                    upgradable_dict[pkg.name]['size'] = lib.human.bytes2human(version.size)
                     break
 
     return upgradable_dict, len(upgradable_dict)
@@ -201,6 +194,14 @@ def hold_back(apt_output, upgrade_dict):
     return len(held_back)
 
 
+def get_site_archive_component(origin, package_dict):
+    """Gets site, archive and component properties of an apt.package.Origin object"""
+
+    package_dict['site'] = origin.site
+    package_dict['archive'] = origin.archive
+    package_dict['component'] = origin.component
+
+
 def is_security_upgrade(upgradable_dict, apt_cache):
     """This function returns whether a package is a security upgrade or not
         by checking its origin.
@@ -211,12 +212,15 @@ def is_security_upgrade(upgradable_dict, apt_cache):
         package = apt_cache[name]
         for v in package.versions:
             if v.version == upgradable_dict[name]['next_ver']:
+                upgradable_dict[name]['summary'] = v.summary
                 for o in v.origins:
                     if 'security' in o.archive:
                         upgradable_dict[name]['security'] = True
+                        get_site_archive_component(o, upgradable_dict[name])
                         count_security += 1
                     else:
                         upgradable_dict[name]['security'] = False
+                        get_site_archive_component(v.origins[0], upgradable_dict[name])
 
     return count_security
 
@@ -241,6 +245,65 @@ def apt_get_upgrade_simulation(upgrade_dict):
     return -1
 
 
+def show_extended(upgradable_dict, filter_list):
+    """Return a table with extended package information"""
+
+    msg = ''
+    table_values = []
+
+    for pkg in upgradable_dict.keys():
+        condition = False
+        if len(filter_list) > 1:
+            for filter_str in filter_list:
+                condition += upgradable_dict[pkg][filter_str]
+            condition = not condition
+        else:
+            condition = upgradable_dict[pkg][filter_list[0]]
+
+        if condition:
+            table_values.append({
+                    'package': pkg,
+                    'current_ver': upgradable_dict[pkg]['current_ver'],
+                    'next_ver': upgradable_dict[pkg]['next_ver'],
+                    'size': upgradable_dict[pkg]['size'],
+                    'priority': upgradable_dict[pkg]['priority'],
+                    'archive': upgradable_dict[pkg]['archive'],
+                    'component': upgradable_dict[pkg]['component'],
+                    'site': upgradable_dict[pkg]['site'],
+                })
+
+    columns = table_values[0].keys()
+    headers = ['Package', 'Current Ver.', 'New Version', 'Size', 'Priority', 'Archive', 'Component', 'Site']
+
+    if len(table_values) > 0:
+        msg = '\n\n'
+        msg += lib.base.get_table(data=table_values, cols=columns, header=headers)
+
+    return msg
+
+
+def show_list_special(upgradable_dict, key):
+    """Create a string containing an enumeration of keys in upgradable_dict"""
+
+    enum_string = f'\n\n{key.capitalize()}:\n'
+    for pkg in upgradable_dict.keys():
+        if upgradable_dict[pkg][key]:
+            enum_string += '  - ' + pkg + '\n'
+
+    return enum_string
+
+
+def show_list_normal(upgradable_dict):
+    """Create a string containing an enumeration of keys in upgradable_dict"""
+
+    enum_string = f'\n\nNormal updates:\n'
+    for pkg in upgradable_dict.keys():
+        if not upgradable_dict[pkg]['dist-upgrade'] and not upgradable_dict[pkg]['security']:
+            enum_string += '  - ' + pkg + '\n'
+
+    return enum_string
+
+
 def main():
     """The main function. Hier spielt die Musik.
     """
@@ -253,7 +316,10 @@ def main():
     # properties and methods and may be used in different functions.
     # They deliver different information.
     # == Initialize apt.cache.Cache() ==
-    apt_cache = apt_cache_init(args.update)
+    try:
+        apt_cache = apt_cache_init(args.update)
+    except Exception:
+        lib.base.cu(msg='There might be a problem with some package repositories.')
     # == Initialize the apt_pkg.Cache() ==
     apt_pkg.init()
     pkg_cache = apt_pkg.Cache(progress=None)
@@ -263,12 +329,14 @@ def main():
     upgradable_dict, count_upgradable = get_upgradable(pkg_names, apt_cache, pkg_cache)
     count_security = is_security_upgrade(upgradable_dict, apt_cache)
     count_dist_upgrade = apt_get_upgrade_simulation(upgradable_dict)
+    if count_dist_upgrade == -1:
+        lib.base.cu()
 
     data_performance = ''
 
     exit_status = STATE_OK
     if count_upgradable:
-        data_shown = f'Found pending updates. {count_upgradable}/{count_installed},'\
+        data_shown = f'Found pending updates. {count_upgradable}/{count_installed}, '\
                      + f'dist: {count_dist_upgrade}, security: {count_security}'
 
         # Set return status
@@ -278,26 +346,29 @@ def main():
             exit_status = STATE_CRIT
 
         if count_security:
-            data_shown += f'\n\nSecurity updates:\n'
-            for pkg in upgradable_dict.keys():
-                if upgradable_dict[pkg]['security']:
-                    data_shown += '  - ' + pkg + '\n'
+            if not args.show_extended:
+                data_shown += show_list_special(upgradable_dict, 'security')
+            else:
+                data_shown += '\n\nSecurity\n:'
+                data_shown += show_extended(upgradable_dict, filter_list=['security'])
             if 'security' in args.criticality:
                 exit_status = STATE_CRIT
 
         if count_dist_upgrade:
-            data_shown += f'\n\ndist-upgrades:\n'
-            for pkg in upgradable_dict.keys():
-                if upgradable_dict[pkg]['dist-upgrades']:
-                    data_shown += '  - ' + pkg + '\n'
+            if not args.show_extended:
+                data_shown += show_list_special(upgradable_dict, 'dist-upgrade')
+            else:
+                data_shown += '\n\nSecurity:\n'
+                data_shown += show_extended(upgradable_dict, filter_list=['dist-upgrade'])
             # Set optional criticality states
             if 'dist-upgrade' in args.criticality:
                 exit_status = STATE_CRIT
 
-        data_shown += f'\n\nNormal updates:\n'
-        for pkg in upgradable_dict.keys():
-            if not upgradable_dict[pkg]['dist-upgrade'] and not upgradable_dict[pkg]['security']:
-                data_shown += '  - ' + pkg + '\n'
+        if not args.show_extended:
+            data_shown += show_list_normal(upgradable_dict)
+        else:
+            data_shown += '\n\nStandard updates:\n'
+            data_shown += show_extended(upgradable_dict, filter_list=['dist-upgrade', 'security'])
 
     else:
         data_shown = f'No upgradable packages found. {count_upgradable}/{count_installed}'

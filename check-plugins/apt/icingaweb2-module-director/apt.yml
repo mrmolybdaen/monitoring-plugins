@@ -1,4 +1,4 @@
 ---
 overwrites:
-  '["ServiceTemplate"]["tpl-service-systemd-timesyncd"]["enable_perfdata"]': true
-  '["ServiceTemplate"]["tpl-service-systemd-timesyncd"]["vars"]["criticality"]': 'B'
+  '["ServiceTemplate"]["tpl-service-apt"]["enable_perfdata"]': true
+  '["ServiceTemplate"]["tpl-service-apt"]["vars"]["criticality"]': 'B'

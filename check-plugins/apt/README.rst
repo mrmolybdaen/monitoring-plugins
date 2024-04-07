@@ -57,6 +57,7 @@ Usage Examples
 Just a list:
 
 .. code-block:: bash
+
     sudo python3 apt --update --warning 0 --critical 0 --criticality security dist-upgrade
 
 Output:
@@ -81,7 +82,6 @@ Showing extended information:
 .. code-block:: bash
 
     sudo python3 apt --update --warning 0 --critical 0 --criticality security dist-upgrade --show-extended
-
 
 .. code-block:: text
 

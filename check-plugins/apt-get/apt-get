@@ -244,8 +244,6 @@ def apt_get_upgrade_simulation(upgrade_dict):
     """
 
     success, result = lib.shell.shell_exec('apt-get upgrade -q --simulate')
-    print(success)
-    print(result)
     if success:
         result_lines = result[0].splitlines()
         count_upgrade = hold_back(result_lines, upgrade_dict)
